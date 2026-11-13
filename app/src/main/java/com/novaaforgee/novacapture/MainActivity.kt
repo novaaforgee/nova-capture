@@ -56,6 +56,11 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+
+        // Auto-launch Presentation / Stealth session if already granted
+        if (!FloatingCaptureService.isServiceRunning && Settings.canDrawOverlays(this)) {
+            requestMediaProjectionPermission()
+        }
     }
 
     override fun onResume() {
@@ -94,7 +99,7 @@ class MainActivity : ComponentActivity() {
         }
 
         viewModel.updateServiceStatus(true)
-        // Minimize app to show presentation/floating controls directly over other apps
+        // Minimize app to enter Presentation Mode immediately
         moveTaskToBack(true)
     }
 
