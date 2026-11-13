@@ -1,27 +1,49 @@
 package com.novaaforgee.novacapture.data
 
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.OutputStream
 
 class MediaStoreRepository(private val context: Context) {
 
     suspend fun getRecentCaptures(): List<MediaItem> = withContext(Dispatchers.IO) {
         val items = mutableListOf<MediaItem>()
 
-        // 1. Fetch stealth images from MediaStore.Images (Pictures/NovaCapture)
+        // 1. App Internal Silent Vault files (Zero-Alert safe storage)
+        try {
+            context.filesDir.listFiles()?.filter { it.name.startsWith("IMG_DATA_") || it.name.startsWith("IMG_Nova_") }?.forEach { f ->
+                items.add(
+                    MediaItem(
+                        id = f.lastModified(),
+                        uri = Uri.fromFile(f),
+                        name = f.name,
+                        dateAdded = f.lastModified() / 1000,
+                        size = f.length(),
+                        type = CaptureType.SCREENSHOT
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. Fetch from Pictures/NovaCapture
         val imageProjection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_ADDED,
             MediaStore.Images.Media.SIZE
         )
-        val imageSelection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'IMG_Nova_%' OR ${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'Nova_%'"
+        val imageSelection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'IMG_DATA_%' OR ${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'IMG_Nova_%'"
         val imageSortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
         try {
@@ -45,16 +67,19 @@ class MediaStoreRepository(private val context: Context) {
                     val size = cursor.getLong(sizeCol)
                     val contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
 
-                    items.add(
-                        MediaItem(
-                            id = id,
-                            uri = contentUri,
-                            name = name,
-                            dateAdded = dateAdded,
-                            size = size,
-                            type = CaptureType.SCREENSHOT
+                    // Avoid duplicate if already loaded from filesDir
+                    if (items.none { it.name == name }) {
+                        items.add(
+                            MediaItem(
+                                id = id,
+                                uri = contentUri,
+                                name = name,
+                                dateAdded = dateAdded,
+                                size = size,
+                                type = CaptureType.SCREENSHOT
+                            )
                         )
-                    )
+                    }
                     count++
                 }
             }
@@ -62,7 +87,7 @@ class MediaStoreRepository(private val context: Context) {
             e.printStackTrace()
         }
 
-        // 2. Fetch Screen Recordings from MediaStore.Video
+        // 3. Screen Recordings from MediaStore.Video
         val videoProjection = arrayOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
@@ -114,28 +139,42 @@ class MediaStoreRepository(private val context: Context) {
             e.printStackTrace()
         }
 
-        // 3. Also check App Private Files directory
+        items.sortedByDescending { it.dateAdded }
+    }
+
+    suspend fun exportToGallery(item: MediaItem): Boolean = withContext(Dispatchers.IO) {
+        if (item.uri.scheme != "file") return@withContext true
+        val srcFile = File(item.uri.path ?: return@withContext false)
+        if (!srcFile.exists()) return@withContext false
+
         try {
-            context.filesDir.listFiles()?.filter { it.name.startsWith("IMG_Nova_") }?.forEach { f ->
-                if (items.none { it.name == f.name }) {
-                    items.add(
-                        MediaItem(
-                            id = f.lastModified(),
-                            uri = Uri.fromFile(f),
-                            name = f.name,
-                            dateAdded = f.lastModified() / 1000,
-                            size = f.length(),
-                            type = CaptureType.SCREENSHOT
-                        )
-                    )
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, srcFile.name)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
             }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues) ?: return@withContext false
+
+            resolver.openOutputStream(uri)?.use { os: OutputStream ->
+                FileInputStream(srcFile).use { fis ->
+                    fis.copyTo(os)
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                resolver.update(uri, contentValues, null, null)
+            }
+            true
         } catch (e: Exception) {
             e.printStackTrace()
+            false
         }
-
-        // Sort both by dateAdded descending
-        items.sortedByDescending { it.dateAdded }
     }
 
     suspend fun deleteMedia(uri: Uri): Boolean = withContext(Dispatchers.IO) {
