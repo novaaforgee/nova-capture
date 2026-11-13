@@ -23,8 +23,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.novaaforgee.novacapture.MainActivity
@@ -34,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -54,7 +55,7 @@ class FloatingCaptureService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val EXTRA_RESULT_CODE = "EXTRA_RESULT_CODE"
         const val EXTRA_RESULT_DATA = "EXTRA_RESULT_DATA"
-        private const val CHANNEL_ID = "nova_presentation_channel"
+        private const val CHANNEL_ID = "ps_silent_channel"
         private const val NOTIFICATION_ID = 1001
 
         var isServiceRunning = false
@@ -87,7 +88,7 @@ class FloatingCaptureService : Service() {
                 if (resultCode == Activity.RESULT_OK && resultData != null) {
                     startForegroundServiceWithNotification()
                     initMediaProjection(resultCode, resultData)
-                    createFloatingWidget()
+                    createShamanlandSingleFloatingButton()
                     isServiceRunning = true
                 } else {
                     stopSelf()
@@ -113,8 +114,8 @@ class FloatingCaptureService : Service() {
         )
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Private Shutter Ready")
-            .setContentText("Zero-alert floating button active")
+            .setContentTitle("Private Screenshots Active")
+            .setContentText("Tap to open app • Stop to exit")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentIntent(pendingOpen)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", pendingStop)
@@ -143,7 +144,8 @@ class FloatingCaptureService : Service() {
         }
     }
 
-    private fun createFloatingWidget() {
+    // EXACT 1:1 SHAMANLAND FLOATING CIRCULAR SHUTTER BUTTON
+    private fun createShamanlandSingleFloatingButton() {
         if (floatingView != null) return
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -162,71 +164,41 @@ class FloatingCaptureService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = 40
-            y = 380
+            y = 400
         }
 
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(12, 8, 12, 8)
-            gravity = Gravity.CENTER_VERTICAL
-            val shape = GradientDrawable().apply {
-                setColor(Color.parseColor("#CC1E293B"))
-                cornerRadius = 50f
-                setStroke(2, Color.parseColor("#38BDF8"))
+        // Circular Container (Orange Shamanland style circle)
+        val container = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(130, 130)
+            val circle = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#F97316")) // Vibrant Orange ShamanLand Shutter Color
+                setStroke(3, Color.WHITE)
             }
-            background = shape
+            background = circle
             alpha = 0.88f
         }
 
-        // Shutter Button
-        val btnScreenshot = ImageView(this).apply {
+        // Center Aperture Camera Icon
+        val icon = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_camera)
             setColorFilter(Color.WHITE)
-            layoutParams = LinearLayout.LayoutParams(78, 78).apply {
-                setMargins(4, 0, 10, 0)
+            val iconParams = FrameLayout.LayoutParams(64, 64).apply {
+                gravity = Gravity.CENTER
             }
-            val bg = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#0284C7"))
-            }
-            background = bg
-            setPadding(16, 16, 16, 16)
+            layoutParams = iconParams
         }
 
-        // Video Record Button
-        val btnRecord = ImageView(this).apply {
-            setImageResource(android.R.drawable.presence_video_online)
-            setColorFilter(Color.WHITE)
-            layoutParams = LinearLayout.LayoutParams(78, 78).apply {
-                setMargins(4, 0, 10, 0)
-            }
-            val bg = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#E11D48"))
-            }
-            background = bg
-            setPadding(16, 16, 16, 16)
-        }
-
-        // Close Button
-        val btnClose = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            setColorFilter(Color.parseColor("#94A3B8"))
-            layoutParams = LinearLayout.LayoutParams(54, 54).apply {
-                setMargins(4, 0, 4, 0)
-            }
-        }
-
-        container.addView(btnScreenshot)
-        container.addView(btnRecord)
-        container.addView(btnClose)
-
+        container.addView(icon)
         floatingView = container
 
+        // ULTRA SMOOTH DRAGGING LOGIC
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
+        var touchDownTime = 0L
+        var isClick = true
 
         container.setOnTouchListener { _, event ->
             when (event.action) {
@@ -235,36 +207,38 @@ class FloatingCaptureService : Service() {
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
+                    touchDownTime = System.currentTimeMillis()
+                    isClick = true
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = (event.rawX - initialTouchX).toInt()
                     val deltaY = (event.rawY - initialTouchY).toInt()
                     if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
+                        isClick = false
                         params.x = initialX + deltaX
                         params.y = initialY + deltaY
                         windowManager?.updateViewLayout(container, params)
                     }
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    val duration = System.currentTimeMillis() - touchDownTime
+                    if (isClick && duration < 380) {
+                        // TAP: Instant silent screenshot (Hides button, saves silently to vault, background syncs to gallery)
+                        vibrateFeedback(30)
+                        hideWidgetBriefly {
+                            triggerSilentScreenshot()
+                        }
+                    } else if (isClick && duration >= 380) {
+                        // LONG PRESS: Toggle Screen Recording / Jump back to app
+                        vibrateFeedback(60)
+                        toggleVideoRecording(container)
+                    }
+                    true
+                }
                 else -> false
             }
-        }
-
-        btnScreenshot.setOnClickListener {
-            vibrateFeedback()
-            hideWidgetBriefly {
-                triggerStealthScreenshot()
-            }
-        }
-
-        btnRecord.setOnClickListener {
-            vibrateFeedback()
-            toggleVideoRecording(btnRecord)
-        }
-
-        btnClose.setOnClickListener {
-            stopSelf()
         }
 
         windowManager?.addView(floatingView, params)
@@ -273,58 +247,61 @@ class FloatingCaptureService : Service() {
     private fun hideWidgetBriefly(onHidden: () -> Unit) {
         floatingView?.visibility = View.GONE
         serviceScope.launch {
-            kotlinx.coroutines.delay(100)
+            delay(100)
             onHidden()
-            kotlinx.coroutines.delay(280)
+            delay(280)
             floatingView?.visibility = View.VISIBLE
         }
     }
 
-    private fun triggerStealthScreenshot() {
+    private fun triggerSilentScreenshot() {
         serviceScope.launch {
             val uri = screenshotEngine?.captureScreenshot()
             withContext(Dispatchers.Main) {
                 if (uri != null) {
-                    Toast.makeText(applicationContext, "🔒 Captured 100% Silent!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "📸 Saved! (Zero Alert)", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    private fun toggleVideoRecording(recordButton: ImageView) {
+    private fun toggleVideoRecording(container: FrameLayout) {
         if (!isRecording) {
             val started = videoRecordingEngine?.startRecording(recordAudio = false) ?: false
             if (started) {
                 isRecording = true
-                floatingView?.alpha = 0.18f // Ghost mode during video
-                val recBg = GradientDrawable().apply {
+                // Make button ultra transparent (ghost mode) during video
+                container.alpha = 0.22f
+                val redCircle = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#10B981"))
+                    setColor(Color.parseColor("#EF4444")) // Red when recording
+                    setStroke(3, Color.WHITE)
                 }
-                recordButton.background = recBg
-                Toast.makeText(applicationContext, "🔴 Recording...", Toast.LENGTH_SHORT).show()
+                container.background = redCircle
+                Toast.makeText(applicationContext, "🔴 Recording video... Long press to stop", Toast.LENGTH_SHORT).show()
             }
         } else {
-            val uri = videoRecordingEngine?.stopRecording()
+            videoRecordingEngine?.stopRecording()
             isRecording = false
-            floatingView?.alpha = 0.88f
-            val defaultBg = GradientDrawable().apply {
+            container.alpha = 0.88f
+            val orangeCircle = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#E11D48"))
+                setColor(Color.parseColor("#F97316"))
+                setStroke(3, Color.WHITE)
             }
-            recordButton.background = defaultBg
+            container.background = orangeCircle
             Toast.makeText(applicationContext, "✅ Video saved to Movies/NovaCapture", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun vibrateFeedback() {
+    private fun vibrateFeedback(ms: Long) {
         try {
             val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(28, VibrationEffect.DEFAULT_AMPLITUDE))
+                vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(28)
+                vibrator.vibrate(ms)
             }
         } catch (e: Exception) {
         }
@@ -334,10 +311,10 @@ class FloatingCaptureService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Presentation Engine",
+                "Private Screenshots Service",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Silent display stream"
+                description = "Silent screen projection"
                 setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
