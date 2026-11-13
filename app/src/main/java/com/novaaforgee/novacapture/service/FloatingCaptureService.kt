@@ -25,6 +25,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.novaaforgee.novacapture.MainActivity
@@ -88,7 +89,7 @@ class FloatingCaptureService : Service() {
                 if (resultCode == Activity.RESULT_OK && resultData != null) {
                     startForegroundServiceWithNotification()
                     initMediaProjection(resultCode, resultData)
-                    createShamanlandSingleFloatingButton()
+                    createVerticalShamanlandButtons()
                     isServiceRunning = true
                 } else {
                     stopSelf()
@@ -144,8 +145,8 @@ class FloatingCaptureService : Service() {
         }
     }
 
-    // EXACT 1:1 SHAMANLAND FLOATING CIRCULAR SHUTTER BUTTON
-    private fun createShamanlandSingleFloatingButton() {
+    // VERTICAL LAYOUT: UPAR SS (SCREENSHOT) & NICHE REC (VIDEO RECORDING) - BIG SHAMANLAND SIZE (148x148 px)
+    private fun createVerticalShamanlandButtons() {
         if (floatingView != null) return
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -163,81 +164,114 @@ class FloatingCaptureService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 40
-            y = 400
+            x = 35
+            y = 350
         }
 
-        // Circular Container (Orange Shamanland style circle)
-        val container = FrameLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(130, 130)
+        // Vertical stack container
+        val verticalContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+
+        // 1. UPAR BUTTON: SHAMANLAND ORANGE CIRCLE FOR SCREENSHOT (Big ~148px)
+        val btnScreenshot = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(148, 148).apply {
+                setMargins(0, 0, 0, 14)
+            }
             val circle = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#F97316")) // Vibrant Orange ShamanLand Shutter Color
-                setStroke(3, Color.WHITE)
+                setColor(Color.parseColor("#F97316")) // Classic ShamanLand Vibrant Orange
+                setStroke(4, Color.WHITE)
             }
             background = circle
-            alpha = 0.88f
+            alpha = 0.90f
         }
 
-        // Center Aperture Camera Icon
-        val icon = ImageView(this).apply {
+        val iconCamera = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_camera)
             setColorFilter(Color.WHITE)
-            val iconParams = FrameLayout.LayoutParams(64, 64).apply {
+            val p = FrameLayout.LayoutParams(76, 76).apply {
                 gravity = Gravity.CENTER
             }
-            layoutParams = iconParams
+            layoutParams = p
+        }
+        btnScreenshot.addView(iconCamera)
+
+        // 2. NICHE BUTTON: RED CIRCLE FOR SCREEN RECORDING (Big ~148px)
+        val btnRecord = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(148, 148)
+            val circle = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#EF4444")) // Red Record Color
+                setStroke(4, Color.WHITE)
+            }
+            background = circle
+            alpha = 0.90f
         }
 
-        container.addView(icon)
-        floatingView = container
+        val iconRecord = ImageView(this).apply {
+            setImageResource(android.R.drawable.presence_video_online)
+            setColorFilter(Color.WHITE)
+            val p = FrameLayout.LayoutParams(76, 76).apply {
+                gravity = Gravity.CENTER
+            }
+            layoutParams = p
+        }
+        btnRecord.addView(iconRecord)
 
-        // ULTRA SMOOTH DRAGGING LOGIC
+        verticalContainer.addView(btnScreenshot)
+        verticalContainer.addView(btnRecord)
+
+        floatingView = verticalContainer
+
+        // SMOOTH ACCURATE DRAGGING LOGIC
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
-        var touchDownTime = 0L
-        var isClick = true
+        var isMove = false
 
-        container.setOnTouchListener { _, event ->
+        verticalContainer.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = params.x
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
-                    touchDownTime = System.currentTimeMillis()
-                    isClick = true
-                    true
+                    isMove = false
+                    false // allow children to catch clicks
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = (event.rawX - initialTouchX).toInt()
                     val deltaY = (event.rawY - initialTouchY).toInt()
-                    if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
-                        isClick = false
+                    if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+                        isMove = true
                         params.x = initialX + deltaX
                         params.y = initialY + deltaY
-                        windowManager?.updateViewLayout(container, params)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val duration = System.currentTimeMillis() - touchDownTime
-                    if (isClick && duration < 380) {
-                        // TAP: Instant silent screenshot (Hides button, saves silently to vault, background syncs to gallery)
-                        vibrateFeedback(30)
-                        hideWidgetBriefly {
-                            triggerSilentScreenshot()
-                        }
-                    } else if (isClick && duration >= 380) {
-                        // LONG PRESS: Toggle Screen Recording / Jump back to app
-                        vibrateFeedback(60)
-                        toggleVideoRecording(container)
+                        windowManager?.updateViewLayout(verticalContainer, params)
                     }
                     true
                 }
                 else -> false
+            }
+        }
+
+        // UPAR WALE BUTTON PAR CLICK: SINGLE TAP = SILENT SCREENSHOT
+        btnScreenshot.setOnClickListener {
+            if (!isMove) {
+                vibrateFeedback(30)
+                hideWidgetBriefly {
+                    triggerSilentScreenshot()
+                }
+            }
+        }
+
+        // NICHE WALE BUTTON PAR CLICK: SINGLE TAP = START/STOP VIDEO RECORDING
+        btnRecord.setOnClickListener {
+            if (!isMove) {
+                vibrateFeedback(45)
+                toggleVideoRecording(btnRecord)
             }
         }
 
@@ -259,37 +293,36 @@ class FloatingCaptureService : Service() {
             val uri = screenshotEngine?.captureScreenshot()
             withContext(Dispatchers.Main) {
                 if (uri != null) {
-                    Toast.makeText(applicationContext, "📸 Saved! (Zero Alert)", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "🔒 100% Silent! (Zero Alert)", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    private fun toggleVideoRecording(container: FrameLayout) {
+    private fun toggleVideoRecording(recordContainer: FrameLayout) {
         if (!isRecording) {
             val started = videoRecordingEngine?.startRecording(recordAudio = false) ?: false
             if (started) {
                 isRecording = true
-                // Make button ultra transparent (ghost mode) during video
-                container.alpha = 0.22f
-                val redCircle = GradientDrawable().apply {
+                floatingView?.alpha = 0.20f // Ghost mode during recording
+                val greenCircle = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#EF4444")) // Red when recording
-                    setStroke(3, Color.WHITE)
+                    setColor(Color.parseColor("#10B981")) // Green when recording
+                    setStroke(4, Color.WHITE)
                 }
-                container.background = redCircle
-                Toast.makeText(applicationContext, "🔴 Recording video... Long press to stop", Toast.LENGTH_SHORT).show()
+                recordContainer.background = greenCircle
+                Toast.makeText(applicationContext, "🔴 Recording video...", Toast.LENGTH_SHORT).show()
             }
         } else {
             videoRecordingEngine?.stopRecording()
             isRecording = false
-            container.alpha = 0.88f
-            val orangeCircle = GradientDrawable().apply {
+            floatingView?.alpha = 0.90f
+            val redCircle = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#F97316"))
-                setStroke(3, Color.WHITE)
+                setColor(Color.parseColor("#EF4444"))
+                setStroke(4, Color.WHITE)
             }
-            container.background = orangeCircle
+            recordContainer.background = redCircle
             Toast.makeText(applicationContext, "✅ Video saved to Movies/NovaCapture", Toast.LENGTH_SHORT).show()
         }
     }
