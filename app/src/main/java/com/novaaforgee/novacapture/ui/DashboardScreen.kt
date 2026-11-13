@@ -66,14 +66,14 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Nova Capture",
+                                "Nova Capture v1.1",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
+                                fontSize = 19.sp,
                                 color = TextPrimary
                             )
                             Text(
-                                "Stealth Silent Capture Engine",
-                                fontSize = 12.sp,
+                                "Instant Gallery • Ghost Widget",
+                                fontSize = 11.sp,
                                 color = TextSecondary
                             )
                         }
@@ -100,7 +100,7 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Service Status Hero Card
+            // 1. Shutter Toggle Card
             item {
                 ServiceStatusHeroCard(
                     isActive = uiState.isServiceActive,
@@ -109,9 +109,9 @@ fun DashboardScreen(
                 )
             }
 
-            // 2. Pro Stealth Tip Card
+            // 2. Storage Directory Info
             item {
-                StealthInstructionsCard()
+                QuickStorageCard()
             }
 
             // 3. Captures Section Header
@@ -122,7 +122,7 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Vault Captures (${uiState.recentItems.size})",
+                        "Gallery Captures (${uiState.recentItems.size})",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         color = TextPrimary
@@ -160,10 +160,6 @@ fun DashboardScreen(
                             } catch (e: Exception) {
                             }
                         },
-                        onExport = {
-                            viewModel.exportToGallery(item)
-                            Toast.makeText(context, "Exported to Pictures/NovaCapture!", Toast.LENGTH_SHORT).show()
-                        },
                         onDelete = {
                             viewModel.deleteItem(item)
                         }
@@ -200,13 +196,13 @@ fun ServiceStatusHeroCard(
             ) {
                 Column {
                     Text(
-                        "Silent Shutter Service",
+                        "Presentation Floating Shutter",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = TextPrimary
                     )
                     Text(
-                        if (isActive) "Active (0 detection alert guaranteed)" else "Service stopped",
+                        if (isActive) "Ready on screen (Ghost recording mode)" else "Shutter paused",
                         fontSize = 13.sp,
                         color = if (isActive) Emerald400 else TextSecondary
                     )
@@ -241,7 +237,7 @@ fun ServiceStatusHeroCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isActive) "Stop Shutter Service" else "Launch Silent Shutter",
+                        text = if (isActive) "Stop Shutter Widget" else "Start Capture Mode",
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -251,7 +247,7 @@ fun ServiceStatusHeroCard(
 }
 
 @Composable
-fun StealthInstructionsCard() {
+fun QuickStorageCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -262,16 +258,17 @@ fun StealthInstructionsCard() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                "⚡ How to Take 100% Silent Screenshots:",
+                "⚡ Instant Public Gallery Saving Active",
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 color = Sky400
             )
 
             Text(
-                "1. Tap Shutter Once: Saves to isolated App Vault with ZERO system alert. Target apps cannot detect it.\n" +
-                "2. View & Export: Photos appear right here inside Nova Capture. Tap the Download icon anytime to send to your Phone Gallery.\n" +
-                "3. Long Press Shutter: Direct instant save to Pictures/NovaCapture.",
+                "• Photos save instantly to Pictures/NovaCapture (Visible right in MIUI Gallery)\n" +
+                "• Videos save straight to Movies/NovaCapture\n" +
+                "• Widget auto-hides during screenshot so it never appears in the photo\n" +
+                "• Widget becomes ghost-transparent during video recording",
                 fontSize = 12.sp,
                 color = TextSecondary,
                 lineHeight = 18.sp
@@ -285,7 +282,6 @@ fun MediaItemCard(
     item: MediaItem,
     onShare: () -> Unit,
     onOpen: () -> Unit,
-    onExport: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
@@ -348,13 +344,6 @@ fun MediaItemCard(
                 )
             }
 
-            // Export to Phone Gallery button
-            if (item.uri.scheme == "file") {
-                IconButton(onClick = onExport) {
-                    Icon(Icons.Default.Download, contentDescription = "Export to Gallery", tint = Emerald400)
-                }
-            }
-
             IconButton(onClick = onShare) {
                 Icon(Icons.Default.Share, contentDescription = "Share", tint = Sky400)
             }
@@ -388,7 +377,7 @@ fun EmptyCapturesPlaceholder() {
             color = TextSecondary
         )
         Text(
-            "Tap Launch Silent Shutter to take 100% undetectable screenshots.",
+            "Tap Start Capture Mode to take instant screenshots & screen recordings.",
             fontSize = 12.sp,
             color = Slate700,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
