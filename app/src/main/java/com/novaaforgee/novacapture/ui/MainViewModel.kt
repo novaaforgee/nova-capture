@@ -48,6 +48,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(selectedItem = item)
     }
 
+    fun exportToGallery(item: MediaItem) {
+        viewModelScope.launch {
+            val success = repository.exportToGallery(item)
+            if (success) {
+                refreshDashboard()
+            }
+        }
+    }
+
     fun deleteItem(item: MediaItem) {
         viewModelScope.launch {
             val deleted = repository.deleteMedia(item.uri)
