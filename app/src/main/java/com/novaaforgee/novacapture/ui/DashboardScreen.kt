@@ -3,6 +3,7 @@ package com.novaaforgee.novacapture.ui
 import android.content.Intent
 import android.net.Uri
 import android.text.format.Formatter
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -71,7 +72,7 @@ fun DashboardScreen(
                                 color = TextPrimary
                             )
                             Text(
-                                "Presentation / Stealth Active",
+                                "Stealth Silent Capture Engine",
                                 fontSize = 12.sp,
                                 color = TextSecondary
                             )
@@ -99,7 +100,7 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Status & Hero Activation Card
+            // 1. Service Status Hero Card
             item {
                 ServiceStatusHeroCard(
                     isActive = uiState.isServiceActive,
@@ -108,15 +109,12 @@ fun DashboardScreen(
                 )
             }
 
-            // 2. Storage & Power Architecture Overview
+            // 2. Pro Stealth Tip Card
             item {
-                StorageInfoCard(
-                    screenshotPath = "Pictures/NovaCapture & App Vault",
-                    videoPath = "Movies/NovaCapture"
-                )
+                StealthInstructionsCard()
             }
 
-            // 3. Section Title
+            // 3. Captures Section Header
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -124,7 +122,7 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Captures (${uiState.recentItems.size})",
+                        "Vault Captures (${uiState.recentItems.size})",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         color = TextPrimary
@@ -162,6 +160,10 @@ fun DashboardScreen(
                             } catch (e: Exception) {
                             }
                         },
+                        onExport = {
+                            viewModel.exportToGallery(item)
+                            Toast.makeText(context, "Exported to Pictures/NovaCapture!", Toast.LENGTH_SHORT).show()
+                        },
                         onDelete = {
                             viewModel.deleteItem(item)
                         }
@@ -198,13 +200,13 @@ fun ServiceStatusHeroCard(
             ) {
                 Column {
                     Text(
-                        "Presentation Mode Shutter",
+                        "Silent Shutter Service",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = TextPrimary
                     )
                     Text(
-                        if (isActive) "Stealth overlay ready (Zero detection alert)" else "Presentation offline",
+                        if (isActive) "Active (0 detection alert guaranteed)" else "Service stopped",
                         fontSize = 13.sp,
                         color = if (isActive) Emerald400 else TextSecondary
                     )
@@ -239,7 +241,7 @@ fun ServiceStatusHeroCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isActive) "Exit Presentation Shutter" else "Launch Presentation Mode",
+                        text = if (isActive) "Stop Shutter Service" else "Launch Silent Shutter",
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -249,7 +251,7 @@ fun ServiceStatusHeroCard(
 }
 
 @Composable
-fun StorageInfoCard(screenshotPath: String, videoPath: String) {
+fun StealthInstructionsCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -260,25 +262,20 @@ fun StorageInfoCard(screenshotPath: String, videoPath: String) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                "Stealth Storage Architecture (No-Alert Bypass)",
-                fontWeight = FontWeight.SemiBold,
+                "⚡ How to Take 100% Silent Screenshots:",
+                fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 color = Sky400
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Sky400, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Photos: ", fontSize = 13.sp, color = TextSecondary)
-                Text(screenshotPath, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Videocam, contentDescription = null, tint = Rose500, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Videos: ", fontSize = 13.sp, color = TextSecondary)
-                Text(videoPath, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-            }
+            Text(
+                "1. Tap Shutter Once: Saves to isolated App Vault with ZERO system alert. Target apps cannot detect it.\n" +
+                "2. View & Export: Photos appear right here inside Nova Capture. Tap the Download icon anytime to send to your Phone Gallery.\n" +
+                "3. Long Press Shutter: Direct instant save to Pictures/NovaCapture.",
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 18.sp
+            )
         }
     }
 }
@@ -288,6 +285,7 @@ fun MediaItemCard(
     item: MediaItem,
     onShare: () -> Unit,
     onOpen: () -> Unit,
+    onExport: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
@@ -350,6 +348,13 @@ fun MediaItemCard(
                 )
             }
 
+            // Export to Phone Gallery button
+            if (item.uri.scheme == "file") {
+                IconButton(onClick = onExport) {
+                    Icon(Icons.Default.Download, contentDescription = "Export to Gallery", tint = Emerald400)
+                }
+            }
+
             IconButton(onClick = onShare) {
                 Icon(Icons.Default.Share, contentDescription = "Share", tint = Sky400)
             }
@@ -383,7 +388,7 @@ fun EmptyCapturesPlaceholder() {
             color = TextSecondary
         )
         Text(
-            "Launch Presentation Mode to snap photos & record videos without alerting other apps.",
+            "Tap Launch Silent Shutter to take 100% undetectable screenshots.",
             fontSize = 12.sp,
             color = Slate700,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
