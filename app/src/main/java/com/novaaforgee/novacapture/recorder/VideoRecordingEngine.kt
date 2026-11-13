@@ -27,7 +27,6 @@ class VideoRecordingEngine(
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var currentVideoUri: Uri? = null
     private var pfd: ParcelFileDescriptor? = null
-    private var tempFile: File? = null
 
     var isRecording = false
         private set
@@ -43,7 +42,7 @@ class VideoRecordingEngine(
         val density = metrics.densityDpi
 
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val fileName = "Nova_Record_$timeStamp.mp4"
+        val fileName = "VID_Nova_$timeStamp.mp4"
 
         try {
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -63,7 +62,7 @@ class VideoRecordingEngine(
             recorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
 
-            // Setup destination Uri in MediaStore
+            // Setup destination Uri in MediaStore Movies/NovaCapture
             val contentValues = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
