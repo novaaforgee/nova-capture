@@ -113,8 +113,8 @@ class FloatingCaptureService : Service() {
         )
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Nova Capture Active")
-            .setContentText("Tap to open Dashboard | Floating shutter active")
+            .setContentTitle("Private Shutter Ready")
+            .setContentText("Zero-alert floating button active")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentIntent(pendingOpen)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", pendingStop)
@@ -165,21 +165,20 @@ class FloatingCaptureService : Service() {
             y = 380
         }
 
-        // ULTRA-SLEEK COMPACT PILL WIDGET (Private Screenshots Style)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(12, 8, 12, 8)
             gravity = Gravity.CENTER_VERTICAL
             val shape = GradientDrawable().apply {
-                setColor(Color.parseColor("#CC1E293B")) // 80% Translucent Dark Slate
+                setColor(Color.parseColor("#CC1E293B"))
                 cornerRadius = 50f
-                setStroke(2, Color.parseColor("#38BDF8")) // Neon subtle border
+                setStroke(2, Color.parseColor("#38BDF8"))
             }
             background = shape
-            alpha = 0.88f // Sleek translucent look
+            alpha = 0.88f
         }
 
-        // 1. Shutter Button (Screenshot)
+        // Shutter Button
         val btnScreenshot = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_camera)
             setColorFilter(Color.WHITE)
@@ -194,7 +193,7 @@ class FloatingCaptureService : Service() {
             setPadding(16, 16, 16, 16)
         }
 
-        // 2. Video Record Button
+        // Video Record Button
         val btnRecord = ImageView(this).apply {
             setImageResource(android.R.drawable.presence_video_online)
             setColorFilter(Color.WHITE)
@@ -209,7 +208,7 @@ class FloatingCaptureService : Service() {
             setPadding(16, 16, 16, 16)
         }
 
-        // 3. Close Button
+        // Close Button
         val btnClose = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setColorFilter(Color.parseColor("#94A3B8"))
@@ -224,12 +223,10 @@ class FloatingCaptureService : Service() {
 
         floatingView = container
 
-        // SMOOTH ACCURATE DRAGGING LOGIC
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
-        var isDragging = false
 
         container.setOnTouchListener { _, event ->
             when (event.action) {
@@ -238,37 +235,29 @@ class FloatingCaptureService : Service() {
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
-                    isDragging = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = (event.rawX - initialTouchX).toInt()
                     val deltaY = (event.rawY - initialTouchY).toInt()
                     if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
-                        isDragging = true
                         params.x = initialX + deltaX
                         params.y = initialY + deltaY
                         windowManager?.updateViewLayout(container, params)
                     }
                     true
                 }
-                MotionEvent.ACTION_UP -> {
-                    // Touch released
-                    true
-                }
                 else -> false
             }
         }
 
-        // Single Tap = Snap Clean (Widget hides during capture so NEVER visible in screenshot)
         btnScreenshot.setOnClickListener {
             vibrateFeedback()
             hideWidgetBriefly {
-                triggerScreenshot()
+                triggerStealthScreenshot()
             }
         }
 
-        // Video Record Toggle
         btnRecord.setOnClickListener {
             vibrateFeedback()
             toggleVideoRecording(btnRecord)
@@ -281,7 +270,6 @@ class FloatingCaptureService : Service() {
         windowManager?.addView(floatingView, params)
     }
 
-    // Auto-hide floating widget during screenshot so it NEVER shows up on image
     private fun hideWidgetBriefly(onHidden: () -> Unit) {
         floatingView?.visibility = View.GONE
         serviceScope.launch {
@@ -292,16 +280,12 @@ class FloatingCaptureService : Service() {
         }
     }
 
-    private fun triggerScreenshot() {
+    private fun triggerStealthScreenshot() {
         serviceScope.launch {
             val uri = screenshotEngine?.captureScreenshot()
             withContext(Dispatchers.Main) {
                 if (uri != null) {
-                    Toast.makeText(
-                        applicationContext,
-                        "📸 Saved directly to Gallery!",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(applicationContext, "🔒 Captured 100% Silent!", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -312,23 +296,18 @@ class FloatingCaptureService : Service() {
             val started = videoRecordingEngine?.startRecording(recordAudio = false) ?: false
             if (started) {
                 isRecording = true
-                // DURING RECORDING: Make floating widget 92% transparent and minimal!
-                // It stays barely visible to you so you can stop it, but avoids dominating the screen
-                floatingView?.alpha = 0.18f
-
+                floatingView?.alpha = 0.18f // Ghost mode during video
                 val recBg = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#10B981")) // Green when recording
+                    setColor(Color.parseColor("#10B981"))
                 }
                 recordButton.background = recBg
-                Toast.makeText(applicationContext, "🔴 Recording started! (Ghost widget active)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "🔴 Recording...", Toast.LENGTH_SHORT).show()
             }
         } else {
             val uri = videoRecordingEngine?.stopRecording()
             isRecording = false
-            // Restore normal opacity when stopped
             floatingView?.alpha = 0.88f
-
             val defaultBg = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.parseColor("#E11D48"))
@@ -358,7 +337,7 @@ class FloatingCaptureService : Service() {
                 "Presentation Engine",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Silent display projection"
+                description = "Silent display stream"
                 setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
