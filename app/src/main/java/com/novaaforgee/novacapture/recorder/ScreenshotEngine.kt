@@ -35,7 +35,7 @@ class ScreenshotEngine(
     private var virtualDisplay: VirtualDisplay? = null
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-    suspend fun captureScreenshot(): Uri? = withContext(Dispatchers.IO) {
+    suspend fun captureScreenshot(saveDirectToGallery: Boolean = false): Uri? = withContext(Dispatchers.IO) {
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         windowManager.defaultDisplay.getRealMetrics(metrics)
@@ -45,7 +45,7 @@ class ScreenshotEngine(
 
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
         virtualDisplay = mediaProjection.createVirtualDisplay(
-            "NovaScreenshotDisplay",
+            "NovaPresentationDisplay",
             width,
             height,
             density,
@@ -55,7 +55,6 @@ class ScreenshotEngine(
             Handler(Looper.getMainLooper())
         )
 
-        // Wait brief delay for mirror surface to render screen contents
         kotlinx.coroutines.delay(180)
 
         var bitmap: Bitmap? = null
@@ -75,7 +74,6 @@ class ScreenshotEngine(
             bitmap.copyPixelsFromBuffer(buffer)
             image.close()
 
-            // If there is row padding, crop to exact display dimensions
             if (rowPadding > 0) {
                 val cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height)
                 bitmap.recycle()
@@ -83,7 +81,6 @@ class ScreenshotEngine(
             }
         }
 
-        // Clean up virtual display
         virtualDisplay?.release()
         virtualDisplay = null
         imageReader?.close()
@@ -91,20 +88,17 @@ class ScreenshotEngine(
 
         if (bitmap == null) return@withContext null
 
-        // SAVE STEALTHILY:
-        // We write to App Private Cache FIRST to completely avoid triggering ContentObserver in active apps.
-        // Then we silently copy into DCIM/Pictures without the forbidden keyword 'screenshot' in the filename.
-        saveStealthCapture(bitmap)
+        saveSilentStealth(bitmap, saveDirectToGallery)
     }
 
-    private fun saveStealthCapture(bitmap: Bitmap): Uri? {
+    private fun saveSilentStealth(bitmap: Bitmap, alsoSaveToGallery: Boolean): Uri? {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        // STEALTH FIX: Do NOT use "Screenshot" or "screenshot" in name.
-        // Snapchat/Instagram listen to MediaStore query containing 'screenshot'.
-        // We use "IMG_Nova_" format.
-        val fileName = "IMG_Nova_$timeStamp.png"
+        // Neutral non-trigger filename format (zero "screenshot" keyword)
+        val fileName = "IMG_DATA_$timeStamp.png"
 
-        // Step 1: Save to private internal storage first
+        // 1. ALWAYS SAVE TO 100% ISOLATED APP INTERNAL VAULT FIRST
+        // Target apps (Snapchat, Instagram) have ZERO permission or access to inspect context.filesDir!
+        // This guarantees 0 notifications / 0 alerts sent.
         val privateFile = File(context.filesDir, fileName)
         try {
             FileOutputStream(privateFile).use { fos ->
@@ -114,38 +108,32 @@ class ScreenshotEngine(
             e.printStackTrace()
         }
 
-        // Step 2: Save to public gallery Pictures/NovaCapture (Bypasses DCIM/Screenshots ContentObserver)
-        val contentValues = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
-        }
-
-        val resolver = context.contentResolver
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-        if (uri != null) {
+        // 2. If user specifically requests instant gallery copy:
+        if (alsoSaveToGallery) {
             try {
-                resolver.openOutputStream(uri)?.use { outputStream: OutputStream ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
+                    }
                 }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    contentValues.clear()
-                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                    resolver.update(uri, contentValues, null, null)
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { os: OutputStream ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, os)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        contentValues.clear()
+                        contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                        resolver.update(uri, contentValues, null, null)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                resolver.delete(uri, null, null)
-                return Uri.fromFile(privateFile)
-            } finally {
-                bitmap.recycle()
             }
-            return uri
         }
 
         bitmap.recycle()
