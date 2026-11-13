@@ -71,7 +71,7 @@ fun DashboardScreen(
                                 color = TextPrimary
                             )
                             Text(
-                                "Presentation / Stealth Mode",
+                                "Presentation / Stealth Active",
                                 fontSize = 12.sp,
                                 color = TextSecondary
                             )
@@ -111,7 +111,7 @@ fun DashboardScreen(
             // 2. Storage & Power Architecture Overview
             item {
                 StorageInfoCard(
-                    screenshotPath = "DCIM/Screenshots",
+                    screenshotPath = "Pictures/NovaCapture & App Vault",
                     videoPath = "Movies/NovaCapture"
                 )
             }
@@ -124,7 +124,7 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Public Gallery Captures (${uiState.recentItems.size})",
+                        "Captures (${uiState.recentItems.size})",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         color = TextPrimary
@@ -160,7 +160,6 @@ fun DashboardScreen(
                             try {
                                 context.startActivity(viewIntent)
                             } catch (e: Exception) {
-                                // Fallback
                             }
                         },
                         onDelete = {
@@ -199,13 +198,13 @@ fun ServiceStatusHeroCard(
             ) {
                 Column {
                     Text(
-                        "Floating Shutter Engine",
+                        "Presentation Mode Shutter",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = TextPrimary
                     )
                     Text(
-                        if (isActive) "Ready over any app screen" else "Service offline",
+                        if (isActive) "Stealth overlay ready (Zero detection alert)" else "Presentation offline",
                         fontSize = 13.sp,
                         color = if (isActive) Emerald400 else TextSecondary
                     )
@@ -240,7 +239,7 @@ fun ServiceStatusHeroCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isActive) "Stop Floating Shutter" else "Start Capture Mode",
+                        text = if (isActive) "Exit Presentation Shutter" else "Launch Presentation Mode",
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -261,7 +260,7 @@ fun StorageInfoCard(screenshotPath: String, videoPath: String) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                "Direct Public Gallery Storage",
+                "Stealth Storage Architecture (No-Alert Bypass)",
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 color = Sky400
@@ -270,14 +269,14 @@ fun StorageInfoCard(screenshotPath: String, videoPath: String) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Sky400, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Screenshots: ", fontSize = 13.sp, color = TextSecondary)
+                Text("Photos: ", fontSize = 13.sp, color = TextSecondary)
                 Text(screenshotPath, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Videocam, contentDescription = null, tint = Rose500, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Screen Videos: ", fontSize = 13.sp, color = TextSecondary)
+                Text("Videos: ", fontSize = 13.sp, color = TextSecondary)
                 Text(videoPath, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
             }
         }
@@ -309,7 +308,6 @@ fun MediaItemCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail / Icon
             Box(
                 modifier = Modifier
                     .size(64.dp)
@@ -352,7 +350,6 @@ fun MediaItemCard(
                 )
             }
 
-            // Actions
             IconButton(onClick = onShare) {
                 Icon(Icons.Default.Share, contentDescription = "Share", tint = Sky400)
             }
@@ -386,7 +383,7 @@ fun EmptyCapturesPlaceholder() {
             color = TextSecondary
         )
         Text(
-            "Tap Start Capture Mode to begin snapping photos & recording videos.",
+            "Launch Presentation Mode to snap photos & record videos without alerting other apps.",
             fontSize = 12.sp,
             color = Slate700,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
