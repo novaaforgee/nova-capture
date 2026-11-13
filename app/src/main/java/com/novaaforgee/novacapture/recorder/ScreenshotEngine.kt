@@ -19,6 +19,8 @@ import android.util.DisplayMetrics
 import android.view.WindowManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
@@ -89,19 +91,35 @@ class ScreenshotEngine(
 
         if (bitmap == null) return@withContext null
 
-        // Save directly to Public Gallery in DCIM/Screenshots
-        saveToPublicGallery(bitmap)
+        // SAVE STEALTHILY:
+        // We write to App Private Cache FIRST to completely avoid triggering ContentObserver in active apps.
+        // Then we silently copy into DCIM/Pictures without the forbidden keyword 'screenshot' in the filename.
+        saveStealthCapture(bitmap)
     }
 
-    private fun saveToPublicGallery(bitmap: Bitmap): Uri? {
+    private fun saveStealthCapture(bitmap: Bitmap): Uri? {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val fileName = "Nova_Screenshot_$timeStamp.png"
+        // STEALTH FIX: Do NOT use "Screenshot" or "screenshot" in name.
+        // Snapchat/Instagram listen to MediaStore query containing 'screenshot'.
+        // We use "IMG_Nova_" format.
+        val fileName = "IMG_Nova_$timeStamp.png"
 
+        // Step 1: Save to private internal storage first
+        val privateFile = File(context.filesDir, fileName)
+        try {
+            FileOutputStream(privateFile).use { fos ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Step 2: Save to public gallery Pictures/NovaCapture (Bypasses DCIM/Screenshots ContentObserver)
         val contentValues = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/Screenshots")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
@@ -123,11 +141,14 @@ class ScreenshotEngine(
             } catch (e: Exception) {
                 e.printStackTrace()
                 resolver.delete(uri, null, null)
-                return null
+                return Uri.fromFile(privateFile)
             } finally {
                 bitmap.recycle()
             }
+            return uri
         }
-        return uri
+
+        bitmap.recycle()
+        return Uri.fromFile(privateFile)
     }
 }
