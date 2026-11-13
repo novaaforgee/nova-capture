@@ -3,6 +3,7 @@ package com.novaaforgee.novacapture.data
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -18,9 +19,9 @@ class MediaStoreRepository(private val context: Context) {
     suspend fun getRecentCaptures(): List<MediaItem> = withContext(Dispatchers.IO) {
         val items = mutableListOf<MediaItem>()
 
-        // 1. App Internal Silent Vault files (Zero-Alert safe storage)
+        // 1. Load from 100% Isolated App Private Vault
         try {
-            context.filesDir.listFiles()?.filter { it.name.startsWith("IMG_DATA_") || it.name.startsWith("IMG_Nova_") }?.forEach { f ->
+            context.filesDir.listFiles()?.filter { it.name.startsWith("SNAP_") || it.name.startsWith("IMG_") }?.forEach { f ->
                 items.add(
                     MediaItem(
                         id = f.lastModified(),
@@ -36,58 +37,7 @@ class MediaStoreRepository(private val context: Context) {
             e.printStackTrace()
         }
 
-        // 2. Fetch from Pictures/NovaCapture
-        val imageProjection = arrayOf(
-            MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DISPLAY_NAME,
-            MediaStore.Images.Media.DATE_ADDED,
-            MediaStore.Images.Media.SIZE
-        )
-        val imageSelection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'IMG_DATA_%' OR ${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'IMG_Nova_%'"
-        val imageSortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
-
-        try {
-            context.contentResolver.query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                imageProjection,
-                imageSelection,
-                null,
-                imageSortOrder
-            )?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
-                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
-                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
-
-                var count = 0
-                while (cursor.moveToNext() && count < 25) {
-                    val id = cursor.getLong(idCol)
-                    val name = cursor.getString(nameCol) ?: "Capture"
-                    val dateAdded = cursor.getLong(dateCol)
-                    val size = cursor.getLong(sizeCol)
-                    val contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-
-                    // Avoid duplicate if already loaded from filesDir
-                    if (items.none { it.name == name }) {
-                        items.add(
-                            MediaItem(
-                                id = id,
-                                uri = contentUri,
-                                name = name,
-                                dateAdded = dateAdded,
-                                size = size,
-                                type = CaptureType.SCREENSHOT
-                            )
-                        )
-                    }
-                    count++
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        // 3. Screen Recordings from MediaStore.Video
+        // 2. Load Screen Recordings
         val videoProjection = arrayOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
@@ -142,14 +92,16 @@ class MediaStoreRepository(private val context: Context) {
         items.sortedByDescending { it.dateAdded }
     }
 
+    // Manual Export to Phone Gallery (Only when user taps Download icon inside the app)
     suspend fun exportToGallery(item: MediaItem): Boolean = withContext(Dispatchers.IO) {
         if (item.uri.scheme != "file") return@withContext true
         val srcFile = File(item.uri.path ?: return@withContext false)
         if (!srcFile.exists()) return@withContext false
 
         try {
+            val displayName = "Photo_${System.currentTimeMillis()}.png"
             val contentValues = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, srcFile.name)
+                put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
