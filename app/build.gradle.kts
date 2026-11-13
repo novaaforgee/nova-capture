@@ -20,25 +20,12 @@ android {
         }
     }
 
-    signingConfigs {
-        create("release") {
-            // Standard Android debug keystore so release & debug share the exact same signature
-            // Allows seamless in-place APK updates on phone without deleting the app!
-            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         debug {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
