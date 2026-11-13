@@ -7,20 +7,21 @@ import android.os.Build
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MediaStoreRepository(private val context: Context) {
 
     suspend fun getRecentCaptures(): List<MediaItem> = withContext(Dispatchers.IO) {
         val items = mutableListOf<MediaItem>()
 
-        // 1. Fetch Screenshots from MediaStore.Images
+        // 1. Fetch stealth images from MediaStore.Images (Pictures/NovaCapture)
         val imageProjection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_ADDED,
             MediaStore.Images.Media.SIZE
         )
-        val imageSelection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'Nova_Screenshot_%' OR ${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'Screenshot_%'"
+        val imageSelection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'IMG_Nova_%' OR ${MediaStore.Images.Media.DISPLAY_NAME} LIKE 'Nova_%'"
         val imageSortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
         try {
@@ -39,7 +40,7 @@ class MediaStoreRepository(private val context: Context) {
                 var count = 0
                 while (cursor.moveToNext() && count < 25) {
                     val id = cursor.getLong(idCol)
-                    val name = cursor.getString(nameCol) ?: "Screenshot"
+                    val name = cursor.getString(nameCol) ?: "Capture"
                     val dateAdded = cursor.getLong(dateCol)
                     val size = cursor.getLong(sizeCol)
                     val contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
@@ -69,7 +70,7 @@ class MediaStoreRepository(private val context: Context) {
             MediaStore.Video.Media.SIZE,
             MediaStore.Video.Media.DURATION
         )
-        val videoSelection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE 'Nova_Record_%'"
+        val videoSelection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE 'VID_Nova_%' OR ${MediaStore.Video.Media.DISPLAY_NAME} LIKE 'Nova_Record_%'"
         val videoSortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
 
         try {
@@ -113,14 +114,39 @@ class MediaStoreRepository(private val context: Context) {
             e.printStackTrace()
         }
 
+        // 3. Also check App Private Files directory
+        try {
+            context.filesDir.listFiles()?.filter { it.name.startsWith("IMG_Nova_") }?.forEach { f ->
+                if (items.none { it.name == f.name }) {
+                    items.add(
+                        MediaItem(
+                            id = f.lastModified(),
+                            uri = Uri.fromFile(f),
+                            name = f.name,
+                            dateAdded = f.lastModified() / 1000,
+                            size = f.length(),
+                            type = CaptureType.SCREENSHOT
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         // Sort both by dateAdded descending
         items.sortedByDescending { it.dateAdded }
     }
 
     suspend fun deleteMedia(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
-            val rows = context.contentResolver.delete(uri, null, null)
-            rows > 0
+            if (uri.scheme == "file") {
+                val f = File(uri.path ?: "")
+                if (f.exists()) f.delete() else false
+            } else {
+                val rows = context.contentResolver.delete(uri, null, null)
+                rows > 0
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             false
