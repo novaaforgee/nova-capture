@@ -54,7 +54,7 @@ class FloatingCaptureService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val EXTRA_RESULT_CODE = "EXTRA_RESULT_CODE"
         const val EXTRA_RESULT_DATA = "EXTRA_RESULT_DATA"
-        private const val CHANNEL_ID = "nova_stealth_channel"
+        private const val CHANNEL_ID = "nova_presentation_channel"
         private const val NOTIFICATION_ID = 1001
 
         var isServiceRunning = false
@@ -113,13 +113,13 @@ class FloatingCaptureService : Service() {
         )
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Display Presentation Engine")
-            .setContentText("Presentation Mode Active")
+            .setContentTitle("Display Projection Active")
+            .setContentText("Tap to open Nova Capture")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentIntent(pendingOpen)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", pendingStop)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN) // Silent minimal notification
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -177,7 +177,7 @@ class FloatingCaptureService : Service() {
             background = shape
         }
 
-        // Shutter Button (Stealth Photo)
+        // 1. Silent Shutter Button (Tap = 100% Private Vault Zero-Alert, Long Press = Direct Gallery)
         val btnScreenshot = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_camera)
             setColorFilter(Color.WHITE)
@@ -192,7 +192,7 @@ class FloatingCaptureService : Service() {
             setPadding(18, 18, 18, 18)
         }
 
-        // Video Record Button
+        // 2. Video Record Button
         val btnRecord = ImageView(this).apply {
             setImageResource(android.R.drawable.presence_video_online)
             setColorFilter(Color.WHITE)
@@ -207,7 +207,7 @@ class FloatingCaptureService : Service() {
             setPadding(18, 18, 18, 18)
         }
 
-        // Close Button
+        // 3. Close Button
         val btnClose = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setColorFilter(Color.parseColor("#94A3B8"))
@@ -250,11 +250,21 @@ class FloatingCaptureService : Service() {
             }
         }
 
+        // Single Tap = 100% Zero-Alert Private Vault Mode (Exactly like Private Screenshots)
         btnScreenshot.setOnClickListener {
             vibrateFeedback()
             hideWidgetBriefly {
-                triggerStealthScreenshot()
+                triggerStealthScreenshot(directToGallery = false)
             }
+        }
+
+        // Long Press = Direct Gallery Mode
+        btnScreenshot.setOnLongClickListener {
+            vibrateFeedback()
+            hideWidgetBriefly {
+                triggerStealthScreenshot(directToGallery = true)
+            }
+            true
         }
 
         btnRecord.setOnClickListener {
@@ -279,16 +289,16 @@ class FloatingCaptureService : Service() {
         }
     }
 
-    private fun triggerStealthScreenshot() {
+    private fun triggerStealthScreenshot(directToGallery: Boolean) {
         serviceScope.launch {
-            val uri = screenshotEngine?.captureScreenshot()
+            val uri = screenshotEngine?.captureScreenshot(saveDirectToGallery = directToGallery)
             withContext(Dispatchers.Main) {
                 if (uri != null) {
-                    Toast.makeText(
-                        applicationContext,
-                        "📸 Saved Stealthily (Zero Alert Sent)",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    if (directToGallery) {
+                        Toast.makeText(applicationContext, "📸 Saved to Pictures/NovaCapture", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(applicationContext, "🔒 Silent Capture Saved! (Zero Alert)", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -304,7 +314,7 @@ class FloatingCaptureService : Service() {
                     setColor(Color.parseColor("#10B981"))
                 }
                 recordButton.background = recBg
-                Toast.makeText(applicationContext, "🔴 Screen Video Recording...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "🔴 Recording started...", Toast.LENGTH_SHORT).show()
             }
         } else {
             val uri = videoRecordingEngine?.stopRecording()
@@ -314,7 +324,7 @@ class FloatingCaptureService : Service() {
                 setColor(Color.parseColor("#E11D48"))
             }
             recordButton.background = defaultBg
-            Toast.makeText(applicationContext, "✅ Video Saved to Movies/NovaCapture", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "✅ Video saved to Movies/NovaCapture", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -322,10 +332,10 @@ class FloatingCaptureService : Service() {
         try {
             val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE))
+                vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(35)
+                vibrator.vibrate(30)
             }
         } catch (e: Exception) {
         }
@@ -338,7 +348,7 @@ class FloatingCaptureService : Service() {
                 "Presentation Engine",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Silent display stream"
+                description = "Silent display mirror"
                 setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
