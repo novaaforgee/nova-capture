@@ -35,7 +35,7 @@ class ScreenshotEngine(
     private var virtualDisplay: VirtualDisplay? = null
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-    suspend fun captureScreenshot(saveDirectToGallery: Boolean = false): Uri? = withContext(Dispatchers.IO) {
+    suspend fun captureScreenshot(): Uri? = withContext(Dispatchers.IO) {
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         windowManager.defaultDisplay.getRealMetrics(metrics)
@@ -55,7 +55,8 @@ class ScreenshotEngine(
             Handler(Looper.getMainLooper())
         )
 
-        kotlinx.coroutines.delay(180)
+        // Give virtual display surface 120ms to stabilize off-screen buffer
+        kotlinx.coroutines.delay(120)
 
         var bitmap: Bitmap? = null
         val image: Image? = imageReader?.acquireLatestImage()
@@ -88,17 +89,17 @@ class ScreenshotEngine(
 
         if (bitmap == null) return@withContext null
 
-        saveSilentStealth(bitmap, saveDirectToGallery)
+        // SAVE DIRECTLY TO PUBLIC GALLERY INSTANTLY with STEALTH NAMING
+        // File saved directly into Pictures/NovaCapture (Instant Gallery show without alert)
+        saveDirectToGalleryStealth(bitmap)
     }
 
-    private fun saveSilentStealth(bitmap: Bitmap, alsoSaveToGallery: Boolean): Uri? {
+    private fun saveDirectToGalleryStealth(bitmap: Bitmap): Uri? {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        // Neutral non-trigger filename format (zero "screenshot" keyword)
-        val fileName = "IMG_DATA_$timeStamp.png"
+        // Anti-alert naming: no "screenshot" keyword
+        val fileName = "IMG_Nova_$timeStamp.png"
 
-        // 1. ALWAYS SAVE TO 100% ISOLATED APP INTERNAL VAULT FIRST
-        // Target apps (Snapchat, Instagram) have ZERO permission or access to inspect context.filesDir!
-        // This guarantees 0 notifications / 0 alerts sent.
+        // 1. Also backup in app private storage for in-app instant browsing
         val privateFile = File(context.filesDir, fileName)
         try {
             FileOutputStream(privateFile).use { fos ->
@@ -108,32 +109,39 @@ class ScreenshotEngine(
             e.printStackTrace()
         }
 
-        // 2. If user specifically requests instant gallery copy:
-        if (alsoSaveToGallery) {
+        // 2. Insert into Public Phone Gallery (Pictures/NovaCapture)
+        // Shows up INSTANTLY in MIUI Gallery / Google Photos!
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        if (uri != null) {
             try {
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NovaCapture")
-                        put(MediaStore.Images.Media.IS_PENDING, 1)
-                    }
+                resolver.openOutputStream(uri)?.use { outputStream: OutputStream ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
                 }
-                val resolver = context.contentResolver
-                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                if (uri != null) {
-                    resolver.openOutputStream(uri)?.use { os: OutputStream ->
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, os)
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        contentValues.clear()
-                        contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                        resolver.update(uri, contentValues, null, null)
-                    }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    resolver.update(uri, contentValues, null, null)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                resolver.delete(uri, null, null)
+                return Uri.fromFile(privateFile)
+            } finally {
+                bitmap.recycle()
             }
+            return uri
         }
 
         bitmap.recycle()
